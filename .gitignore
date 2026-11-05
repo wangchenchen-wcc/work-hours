@@ -1,0 +1,14 @@
+# 浏览器登录态（含 Cookie，禁止上传）
+.edge-profile/
+
+# 个人数据
+工时记录.csv
+json/
+
+# 打包产物
+工时网页.exe
+get_work_hours/dist/
+get_work_hours/build/
+__pycache__/
+*.pyc
+*.log
