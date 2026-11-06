@@ -89,6 +89,7 @@ HTML = """<!DOCTYPE html>
     --text: #10324a; --muted: #527089; --border: rgba(110,160,195,.45);
     --panel: rgba(255,255,255,.82); --panel-2: rgba(255,255,255,.72);
     --primary: #2f80d8; --good: #15803d; --warn: #b45309;
+    --thead: rgba(255,255,255,.92); --fade: rgba(255,255,255,.96);
   }
   body {
     margin: 0; color: var(--text); min-height: 100vh;
@@ -100,6 +101,7 @@ HTML = """<!DOCTYPE html>
     --text: #e8f0ff; --muted: #9db3d1; --border: rgba(120,165,220,.38);
     --panel: rgba(11,24,45,.82); --panel-2: rgba(18,35,60,.74);
     --primary: #6aa9ff; --good: #4ade80; --warn: #fbbf24;
+    --thead: rgba(14,29,52,.94); --fade: rgba(11,24,45,.96);
     background: #081326;
   }
   .wrap { position: relative; z-index: 2; max-width: 760px; margin: 0 auto; padding: 190px 18px 56px; }
@@ -261,9 +263,33 @@ HTML = """<!DOCTYPE html>
   .badge.bad { background: rgba(245,158,11,.18); color: var(--warn); }
   .badge.bad::before { background: var(--warn); box-shadow: 0 0 6px var(--warn); }
 
+  .tablebox { position: relative; }
+  .tablewrap {
+    max-height: 60vh; overflow-y: auto; overflow-x: hidden; border-radius: 10px;
+    -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+    scrollbar-width: thin; scrollbar-color: rgba(70,130,170,.30) transparent;
+  }
+  .tablewrap::-webkit-scrollbar { width: 5px; height: 5px; }
+  .tablewrap::-webkit-scrollbar-track { background: transparent; }
+  .tablewrap::-webkit-scrollbar-thumb { background: rgba(70,130,170,.28); border-radius: 999px; }
+  .tablewrap:hover::-webkit-scrollbar-thumb { background: rgba(70,130,170,.55); }
+  body.night .tablewrap { scrollbar-color: rgba(140,190,230,.34) transparent; }
+  body.night .tablewrap::-webkit-scrollbar-thumb { background: rgba(140,190,230,.30); }
+  body.night .tablewrap:hover::-webkit-scrollbar-thumb { background: rgba(140,190,230,.58); }
+
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
   th { text-align: left; padding: 6px 8px; color: var(--muted); font-size: 12px; font-weight: 500; border-bottom: 1px solid var(--border); }
+  .tablewrap th {
+    position: sticky; top: 0; z-index: 2; background: var(--thead);
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  }
   td { padding: 9px 8px; border-bottom: 1px solid rgba(110,160,195,.28); }
+  .tablefade {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 34px; z-index: 3;
+    background: linear-gradient(to top, var(--fade), transparent);
+    opacity: 0; transition: opacity .2s ease; pointer-events: none;
+  }
+  .tablefade.show { opacity: 1; }
   tbody tr { transition: background .12s; }
   tbody tr:hover { background: rgba(214,238,250,.6); }
   td.date { font-variant-numeric: tabular-nums; color: var(--muted); }
@@ -395,10 +421,15 @@ HTML = """<!DOCTYPE html>
     <h2><span class="t"><span class="dot"></span>月度统计</span><input type="month" id="m"></h2>
     <div id="syncinfo" class="syncinfo"></div>
     <div id="stats"></div>
-    <table>
-      <thead><tr><th style="width:110px">日期</th><th style="width:100px">当日工时</th><th>占比</th></tr></thead>
-      <tbody id="rows"></tbody>
-    </table>
+    <div class="tablebox">
+      <div class="tablewrap" id="tablewrap">
+        <table>
+          <thead><tr><th style="width:110px">日期</th><th style="width:100px">当日工时</th><th>占比</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div class="tablefade" id="tablefade"></div>
+    </div>
     <div id="empty" class="empty" style="display:none">
       <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
       该月暂无打卡记录
@@ -434,6 +465,16 @@ function tipHtml(cls, icon, t1, t2) {
   return '<div class="tip"><div class="tico ' + cls + '">' + icon + '</div>' +
     '<div class="tx"><div class="t1">' + t1 + '</div><div class="t2">' + t2 + '</div></div></div>';
 }
+
+function updateTableScroll() {
+  const w = $('tablewrap'), f = $('tablefade');
+  if (!w || !f) return;
+  const scrollable = w.scrollHeight > w.clientHeight + 2;
+  const atBottom = w.scrollTop + w.clientHeight >= w.scrollHeight - 4;
+  f.classList.toggle('show', scrollable && !atBottom);
+}
+$('tablewrap').addEventListener('scroll', updateTableScroll, { passive: true });
+window.addEventListener('resize', updateTableScroll);
 
 async function loadTips() {
   const d = await (await fetch('/api/countdown')).json();
@@ -476,6 +517,7 @@ async function loadMonth() {
     '<td><div class="bar"><i data-w="' + Math.min(100, x.hours / max * 100).toFixed(1) + '" class="' + (x.hours >= 8 ? 'over' : '') + '"></i></div></td></tr>'
   ).join('');
   $('empty').style.display = d.days.length ? 'none' : 'block';
+  requestAnimationFrame(updateTableScroll);
   $('stats').innerHTML = d.days.length ? (
     '<div class="stats">' +
     stat(I.clock, '总工时', d.total.toFixed(2) + ' <small>小时</small>') +
